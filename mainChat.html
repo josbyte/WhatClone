@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Chat App</title>
+  <script defer src="./socket.io/socket.io.js"></script>
+  <style>
+    body {
+      padding: 0; 
+      margin: 10;
+      display: flex;
+    }
+    #isTyping{
+      z-index: -999;
+    }
+    #message-container {
+      width: 100em;
+      max-width: 220vh;
+      height: 90%;
+    }
+  .div1{
+      width: 50em;
+    }
+
+    #message-container div {
+      background-color: #CCC;
+      padding: 5px;
+      width: 100%;
+    }
+
+    #message-container div:nth-child(2n) {
+      background-color: #FFF;
+    }
+
+    #send-container {
+      position: fixed;
+      padding-bottom: 30px;
+      bottom: 0;
+      background-color: white;
+      max-width: 1200px;
+      width: 80%;
+      display: flex;
+    }
+
+    #message-input {
+      flex-grow: 1;
+    }
+    img{
+      margin-right: 10px;
+      display: block;
+    }
+    p {
+      display: flex;
+    }
+  
+  </style>
+</head>
+<body>
+  <div class="div1">
+    <h1>Usuarios online</h1>
+    <ul id="onlineUsers">
+      <li></li>
+    </ul>
+  </div>
+  <div class="div2">
+    <div id="message-container"></div>
+    <form id="send-container">
+      <div id="isTyping">  
+      </div>
+      <input type="text" id="message-input">
+      <button type="submit" id="send-button">Send</button>
+      <input id="uploadfile" type="file" id="siofu_input"/>
+      </form>
+    </form>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+    <script src=".\node_modules\socketio-file-upload\client.js"></script>
+    <script>
+        function getCookie(name) {
+          var value = "; " + document.cookie;
+          var parts = value.split("; " + name + "=");
+          if (parts.length == 2) return parts.pop().split(";").shift();
+        }
+        function base64ImageToBlob(str) {
+          var pos = str.indexOf(';base64,');
+          var type = str.substring(5, pos);
+          var b64 = str.substr(pos + 8);
+          var imageContent = atob(b64);
+          var buffer = new ArrayBuffer(imageContent.length);
+          var view = new Uint8Array(buffer);
+          for(var n = 0; n < imageContent.length; n++) {
+            view[n] = imageContent.charCodeAt(n);
+          }
+          var blob = new Blob([buffer], { type: type });
+        return blob;
+}
+        $(function () {
+          const socket = io('http://localhost:3000')
+          console.log("cookies from mainchat"+document.cookie)
+          var name=getCookie("name");
+          var status=getCookie("status");
+          var img=getCookie("img")
+          var typing=false;
+          var timeout=undefined;
+          var typingTimeout=11;
+          var socketid
+          $('#uploadfile').bind('change', function(e){
+              var data = e.originalEvent.target.files[0];
+              readThenSendFile(data);      
+          });
+          function readThenSendFile(data){
+              var reader = new FileReader();
+              reader.onload = function(evt){
+                  var msg ={};
+                  msg.username = name;
+                  msg.file = evt.target.result;
+                  msg.fileName = data.name;
+                  socket.emit('base64 file', msg);
+              };
+              reader.readAsDataURL(data);
+          }
+          socket.on('base64 file',data =>{
+            if(`${data.file}`.includes("data:image")){
+              var img2 =  `${data.file}`;
+              console.log(img2)
+              const messageElement = document.createElement('div')
+              const messageElementText = document.createElement('p')
+              const avatarImg = document.createElement('img')
+              avatarImg.setAttribute("src", "./img/"+img);
+              avatarImg.setAttribute("width", "64");
+              avatarImg.setAttribute("height", "64");
+              messageElement.append(avatarImg)
+              const fileImg = document.createElement('img')
+              fileImg.setAttribute("src", img2);
+              const fileImgDownload = document.createElement('a')
+              fileImgDownload.setAttribute("href", img2);
+              fileImgDownload.setAttribute("download", `${data.fileName}`)
+              fileImgDownload.innerHTML="Descargar "+`${data.fileName}`
+              messageElement.append(fileImg)
+              messageElement.append(fileImgDownload)
+              messageContainer.append(messageElement)
+            }else{
+              var file2 =  `${data.file}`;
+              console.log("ARCHIVO"+file2)
+              const messageElement = document.createElement('div')
+              const messageElementText = document.createElement('p')
+              const avatarImg = document.createElement('img')
+              avatarImg.setAttribute("src", "./img/"+img);
+              avatarImg.setAttribute("width", "64");
+              avatarImg.setAttribute("height", "64");
+              messageElement.append(avatarImg)
+              const fileImg = document.createElement('a')
+              fileImg.setAttribute("href", file2);
+              fileImg.setAttribute("download", `${data.fileName}`)
+              fileImg.innerHTML="Descargar "+`${data.fileName}`
+              messageElement.append(fileImg)
+              messageContainer.append(messageElement)
+            }
+          })
+
+          socket.emit('new-user', ({name,status,img}))
+
+          const messageContainer = document.getElementById('message-container')
+          const messageForm = document.getElementById('send-container')
+          const messageInput = document.getElementById('message-input')
+          
+          appendMessage('You joined')
+
+
+          setInterval(function(){ checkOnlineUsers=socket.emit('checkOnlineUsers') }, 5000);
+          
+
+          
+          socket.on('chat-message', data => {
+            const messageElement = document.createElement('div')
+            const messageElementText = document.createElement('p')
+            const avatarImg = document.createElement('img')
+            avatarImg.setAttribute("src", "./img/"+`${data.img}`);
+            avatarImg.setAttribute("width", "64");
+            avatarImg.setAttribute("height", "64");
+            messageElementText.innerText = `${data.name}: ${data.message}`
+            messageElement.append(avatarImg)
+            messageElement.append(messageElementText)
+            messageContainer.append(messageElement)
+          })
+
+          socket.on('user-connected', name => {
+            appendMessage(`${name} connected`)
+          })
+
+          socket.on('user-disconnected', name => {
+            appendMessage(`${name} disconnected`)
+          })
+
+          socket.on('giveOnlineUsers', users => {
+            document.getElementById("onlineUsers").innerHTML="";
+            console.log(users)
+            for (var i=0;i<users.length;i++){
+              var li = document.createElement("li");   
+              document.getElementById("onlineUsers").appendChild(li)
+              li.innerHTML=users[i];
+            }
+          });
+          
+          messageForm.addEventListener('submit', e => {
+            e.preventDefault()
+            const message = messageInput.value
+            appendMessage(`You: ${message}`)
+            socket.emit('send-chat-message', ({message, name}))
+            messageInput.value = ''
+          })
+
+          messageForm.addEventListener('keypress', e =>{
+            if(e.which!=13){
+                    typing=true
+                    socket.emit('typing', {name, typing:true})
+                    clearTimeout(timeout)
+                    timeout=setTimeout(typingTimeout, 3000)
+                  }else{
+                    clearTimeout(timeout)
+                    typingTimeout()
+                    //sendMessage() function will be called once the user hits enter
+                    sendMessage()
+                  }
+          })
+
+          function appendMessage(message, avatar) {
+            const messageElement = document.createElement('div')
+            messageContainer.append(messageElement)
+          }
+          function appendMessage(message) {
+            const messageElement = document.createElement('div')
+            const messageElementText = document.createElement('p')
+            const avatarImg = document.createElement('img')
+            avatarImg.setAttribute("src", "./img/"+img);
+            avatarImg.setAttribute("width", "64");
+            avatarImg.setAttribute("height", "64");
+            messageElementText.innerText=message
+            messageElement.append(avatarImg)
+            messageElement.append(messageElementText)
+            messageContainer.append(messageElement)
+          }
+          socket.on('display', (data)=>{
+            if(data.typing==true)
+              document.getElementById("isTyping").innerHTML=`${data.name} is typing...`
+            else
+            document.getElementById("isTyping").innerHTML=""
+          })
+        });
+      </script>
+      </div>
+
+  </body>
+</html>
